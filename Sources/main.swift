@@ -23,8 +23,14 @@ import PerfectHTTPServer
 import PerfectMustache
 import TurnstilePerfect
 import Turnstile
+import TurnstileCrypto
+import TurnstileWeb
+import Foundation
 
 let turnstile = TurnstilePerfect()
+
+let facebook = Facebook(clientID: "CLIENT_ID", clientSecret: "CLIENT_SECRET")
+let google = Google(clientID: "CLIENT_ID", clientSecret: "CLIENT_SECRET")
 
 // Create HTTP server.
 let server = HTTPServer()
@@ -95,6 +101,68 @@ routes.add(method: .post, uri: "/logout") { request, response in
     response.status = .found
     response.addHeader(.location, value: "/")
     response.completed()
+}
+
+routes.add(method: .get, uri: "/login/facebook") { request, response in
+    let state = URandom().secureToken
+    let redirectURL = facebook.getLoginLink(redirectURL: "http://localhost:8181/login/facebook/consumer", state: state)
+    response.status = .found
+    response.setHeader(HTTPResponseHeader.Name.location, value: redirectURL.absoluteString)
+    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.relativeSeconds(3600), path: "/", secure: nil, httpOnly: true))
+    response.completed()
+}
+
+routes.add(method: .get, uri: "/login/facebook/consumer") { request, response in
+    guard let state = request.cookies.filter({$0.0 == "OAuthState"}).first?.1 else {
+        mustacheRequest(request: request, response: response, handler: MustacheHandler(context: ["flash": "Unknown Error"]), templatePath: request.documentRoot + "/views/login.mustache")
+        return
+    }
+    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.absoluteSeconds(0), path: "/", secure: nil, httpOnly: true))
+    var uri = "http://localhost:8181" + request.uri
+
+    do {
+        let credentials = try facebook.authenticate(authorizationCodeCallbackURL: uri, state: state) as! FacebookAccount
+        try request.user.login(credentials: credentials, persist: true)
+        response.status = .found
+        response.addHeader(.location, value: "/")
+        response.completed()
+    } catch let error {
+        let description = (error as? TurnstileError)?.description ?? "Unknown Error"
+        mustacheRequest(request: request, response: response, handler: MustacheHandler(context: ["flash": description]), templatePath: request.documentRoot + "/views/login.mustache")
+    }
+}
+
+routes.add(method: .get, uri: "/login/google") { request, response in
+    let state = URandom().secureToken
+    let redirectURL = google.getLoginLink(redirectURL: "http://localhost:8181/login/google/consumer", state: state)
+    
+    response.status = .found
+    response.setHeader(HTTPResponseHeader.Name.location, value: redirectURL.absoluteString)
+    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: nil, path: "/", secure: nil, httpOnly: true))
+    response.completed()
+}
+
+routes.add(method: .get, uri: "/login/google/consumer") { request, response in
+    guard let state = request.cookies.filter({$0.0 == "OAuthState"}).first?.1 else {
+        mustacheRequest(request: request, response: response, handler: MustacheHandler(context: ["flash": "Unknown Error"]), templatePath: request.documentRoot + "/views/login.mustache")
+        return
+    }
+    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.absoluteSeconds(0), path: "/", secure: nil, httpOnly: true))
+    var uri = "http://localhost:8181" + request.uri
+    
+    if uri.hasSuffix(")") { // Workaround for bug at https://github.com/PerfectlySoft/Perfect-HTTP/pull/4
+        uri.remove(at: uri.index(before: uri.endIndex))
+    }
+    do {
+        let credentials = try google.authenticate(authorizationCodeCallbackURL: uri, state: state) as! GoogleAccount
+        try request.user.login(credentials: credentials, persist: true)
+        response.status = .found
+        response.addHeader(.location, value: "/")
+        response.completed()
+    } catch let error {
+        let description = (error as? TurnstileError)?.description ?? "Unknown Error"
+        mustacheRequest(request: request, response: response, handler: MustacheHandler(context: ["flash": description]), templatePath: request.documentRoot + "/views/login.mustache")
+    }
 }
 
 // Add the routes to the server.

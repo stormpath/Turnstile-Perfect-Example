@@ -6,4 +6,4 @@ RUN /usr/src/Perfect-Ubuntu/install_swift.sh --sure
 RUN git clone https://github.com/PerfectlySoft/PerfectTemplate /usr/src/PerfectTemplate
 WORKDIR /usr/src/PerfectTemplate
 RUN swift build
-CMD .build/debug/PerfectTemplate --port 80
+CMD .build/debug/PerfectTemplate --port $PORT
