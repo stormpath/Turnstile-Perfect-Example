@@ -1,22 +1,3 @@
-//
-//  main.swift
-//  PerfectTemplate
-//
-//  Created by Kyle Jessup on 2015-11-05.
-//	Copyright (C) 2015 PerfectlySoft, Inc.
-//
-//===----------------------------------------------------------------------===//
-//
-// This source file is part of the Perfect.org open source project
-//
-// Copyright (c) 2015 - 2016 PerfectlySoft Inc. and the Perfect project authors
-// Licensed under Apache License v2.0
-//
-// See http://perfect.org/licensing.html for license information
-//
-//===----------------------------------------------------------------------===//
-//
-
 import PerfectLib
 import PerfectHTTP
 import PerfectHTTPServer
@@ -28,28 +9,33 @@ import TurnstileCrypto
 import TurnstileWeb
 import Foundation
 
-let turnstile = TurnstilePerfect()
+let accountStore = ExampleAccountStore()
 
-let facebook = Facebook(clientID: "CLIENT_ID", clientSecret: "CLIENT_SECRET")
-let google = Google(clientID: "CLIENT_ID", clientSecret: "CLIENT_SECRET")
+let turnstile = TurnstilePerfect(sessionManager: ExampleSessionManager(accountStore: accountStore), realm: ExampleRealm(accountStore: accountStore))
 
 // Create HTTP server.
 let server = HTTPServer()
 
-// Register your own routes and handlers
+/**
+ Endpoint for the home page.
+ */
 var routes = Routes()
+
 routes.add(method: .get, uri: "/") {
     request, response in
-    let context: [String : Any] = ["accountID": request.user.authDetails?.account.uniqueID ?? "",
-                   "authenticated": request.user.authenticated]
+    let context: [String : Any] = ["account": (request.user.authDetails?.account as? ExampleAccount)?.dict,
+                                   "baseURL": request.baseURL,
+                                   "authenticated": request.user.authenticated]
     
     response.render(template: "index", context: context)
 }
 
+/**
+ Login Endpoint
+ */
 routes.add(method: .get, uri: "/login") { request, response in
     response.render(template: "login")
 }
-
 
 routes.add(method: .post, uri: "/login") { request, response in
     
@@ -69,6 +55,9 @@ routes.add(method: .post, uri: "/login") { request, response in
     
 }
 
+/**
+ Registration Endpoint
+ */
 routes.add(method: .get, uri: "/register") { request, response in
     response.render(template: "register");
 }
@@ -92,61 +81,112 @@ routes.add(method: .post, uri: "/register") { request, response in
     }
 }
 
+/**
+ API Endpoint for /me
+ */
+
+routes.add(method: .get, uri: "/api/me") { request, response in
+    guard let account = request.user.authDetails?.account as? ExampleAccount else {
+        response.status = .unauthorized
+        response.appendBody(string: "401 Unauthorized")
+        response.completed()
+        return
+    }
+    response.appendBody(string: account.json)
+    response.completed()
+    return
+}
+
+/**
+ Logout endpoint
+ */
 routes.add(method: .post, uri: "/logout") { request, response in
     request.user.logout()
     
     response.redirect(path: "/")
 }
 
-routes.add(method: .get, uri: "/login/facebook") { request, response in
-    let state = URandom().secureToken
-    let redirectURL = facebook.getLoginLink(redirectURL: "http://localhost:8181/login/facebook/consumer", state: state)
+/**
+ If Facebook Auth is configured, let's add /login/facebook and /login/facebook/consumer
+ See this for an overview of the flow:
+ https://github.com/stormpath/Turnstile#authenticating-with-facebook-or-google
+ */
+if let clientID = ProcessInfo.processInfo.environment["FACEBOOK_CLIENT_ID"],
+    let clientSecret = ProcessInfo.processInfo.environment["FACEBOOK_CLIENT_SECRET"] {
     
-    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.relativeSeconds(3600), path: "/", secure: nil, httpOnly: true))
-    response.redirect(path: redirectURL.absoluteString)
+    let facebook = Facebook(clientID: clientID, clientSecret: clientSecret)
+    
+    routes.add(method: .get, uri: "/login/facebook") { request, response in
+        let state = URandom().secureToken
+        let redirectURL = facebook.getLoginLink(redirectURL: request.baseURL + "/login/facebook/consumer", state: state)
+        
+        response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.relativeSeconds(3600), path: "/", secure: nil, httpOnly: true))
+        response.redirect(path: redirectURL.absoluteString)
+    }
+    
+    routes.add(method: .get, uri: "/login/facebook/consumer") { request, response in
+        guard let state = request.cookies.filter({$0.0 == "OAuthState"}).first?.1 else {
+            response.render(template: "login", context: ["flash": "Unknown Error"])
+            return
+        }
+        response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.absoluteSeconds(0), path: "/", secure: nil, httpOnly: true))
+        var uri = "http://localhost:8181" + request.uri
+        
+        do {
+            let credentials = try facebook.authenticate(authorizationCodeCallbackURL: uri, state: state) as! FacebookAccount
+            try request.user.login(credentials: credentials, persist: true)
+            response.redirect(path: "/")
+        } catch let error {
+            let description = (error as? TurnstileError)?.description ?? "Unknown Error"
+            response.render(template: "login", context: ["flash": description])
+        }
+    }
+} else {
+    routes.add(method: .get, uri: "/login/facebook") { request, response in
+        response.appendBody(string: "You need to configure Facebook Login first!")
+        response.completed()
+    }
 }
 
-routes.add(method: .get, uri: "/login/facebook/consumer") { request, response in
-    guard let state = request.cookies.filter({$0.0 == "OAuthState"}).first?.1 else {
-        response.render(template: "login", context: ["flash": "Unknown Error"])
-        return
-    }
-    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.absoluteSeconds(0), path: "/", secure: nil, httpOnly: true))
-    var uri = "http://localhost:8181" + request.uri
-
-    do {
-        let credentials = try facebook.authenticate(authorizationCodeCallbackURL: uri, state: state) as! FacebookAccount
-        try request.user.login(credentials: credentials, persist: true)
-        response.redirect(path: "/")
-    } catch let error {
-        let description = (error as? TurnstileError)?.description ?? "Unknown Error"
-        response.render(template: "login", context: ["flash": description])
-    }
-}
-
-routes.add(method: .get, uri: "/login/google") { request, response in
-    let state = URandom().secureToken
-    let redirectURL = google.getLoginLink(redirectURL: "http://localhost:8181/login/google/consumer", state: state)
+/**
+ If Google Auth is configured, let's add /login/google and /login/google/consumer
+ See this for an overview of the flow:
+ https://github.com/stormpath/Turnstile#authenticating-with-facebook-or-google
+ */
+if let clientID = ProcessInfo.processInfo.environment["GOOGLE_CLIENT_ID"],
+    let clientSecret = ProcessInfo.processInfo.environment["GOOGLE_CLIENT_SECRET"] {
     
-    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: nil, path: "/", secure: nil, httpOnly: true))
-    response.redirect(path: redirectURL.absoluteString)
-}
-
-routes.add(method: .get, uri: "/login/google/consumer") { request, response in
-    guard let state = request.cookies.filter({$0.0 == "OAuthState"}).first?.1 else {
-        response.render(template: "login", context: ["flash": "Unknown Error"])
-        return
-    }
-    response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.absoluteSeconds(0), path: "/", secure: nil, httpOnly: true))
-    var uri = "http://localhost:8181" + request.uri
+    let google = Google(clientID: clientID, clientSecret: clientSecret)
     
-    do {
-        let credentials = try google.authenticate(authorizationCodeCallbackURL: uri, state: state) as! GoogleAccount
-        try request.user.login(credentials: credentials, persist: true)
-        response.redirect(path: "/")
-    } catch let error {
-        let description = (error as? TurnstileError)?.description ?? "Unknown Error"
-        response.render(template: "login", context: ["flash": description])
+    routes.add(method: .get, uri: "/login/google") { request, response in
+        let state = URandom().secureToken
+        let redirectURL = google.getLoginLink(redirectURL: request.baseURL + "/login/google/consumer", state: state)
+        
+        response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: nil, path: "/", secure: nil, httpOnly: true))
+        response.redirect(path: redirectURL.absoluteString)
+    }
+    
+    routes.add(method: .get, uri: "/login/google/consumer") { request, response in
+        guard let state = request.cookies.filter({$0.0 == "OAuthState"}).first?.1 else {
+            response.render(template: "login", context: ["flash": "Unknown Error"])
+            return
+        }
+        response.addCookie(HTTPCookie(name: "OAuthState", value: state, domain: nil, expires: HTTPCookie.Expiration.absoluteSeconds(0), path: "/", secure: nil, httpOnly: true))
+        var uri = "http://localhost:8181" + request.uri
+        
+        do {
+            let credentials = try google.authenticate(authorizationCodeCallbackURL: uri, state: state) as! GoogleAccount
+            try request.user.login(credentials: credentials, persist: true)
+            response.redirect(path: "/")
+        } catch let error {
+            let description = (error as? TurnstileError)?.description ?? "Unknown Error"
+            response.render(template: "login", context: ["flash": description])
+        }
+    }
+}else {
+    routes.add(method: .get, uri: "/login/google") { request, response in
+        response.appendBody(string: "You need to configure Google Login first!")
+        response.completed()
     }
 }
 
