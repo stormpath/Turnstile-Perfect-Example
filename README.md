@@ -26,7 +26,7 @@ $ echo 'eval "$(swiftenv init -)"' >> ~/.bash_profile
 ```bash
 $ swiftenv install
 $ swift build
-$ .build/debug/App
+$ .build/debug/PerfectAuth
 ```
 
 The application should run on port `8181` by default, so you should be able to access it from `http://localhost:8181`
