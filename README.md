@@ -1,104 +1,75 @@
-# PerfectTemplate
+# Perfect Authentication Demo
 
-[![Perfect logo](http://www.perfect.org/github/Perfect_GH_header_854.jpg)](http://perfect.org/get-involved.html)
+[![Slack Status](https://talkstormpath.shipit.xyz/badge.svg)](https://talkstormpath.shipit.xyz)
 
-[![Perfect logo](http://www.perfect.org/github/Perfect_GH_button_1_Star.jpg)](https://github.com/PerfectlySoft/Perfect)
-[![Perfect logo](http://www.perfect.org/github/Perfect_GH_button_2_Git.jpg)](https://gitter.im/PerfectlySoft/Perfect)
-[![Perfect logo](http://www.perfect.org/github/Perfect_GH_button_3_twit.jpg)](https://twitter.com/perfectlysoft)
-[![Perfect logo](http://www.perfect.org/github/Perfect_GH_button_4_slack.jpg)](http://perfect.ly)
+This is a demo for [Perfect](https://perfect.org)'s authentication using the [Turnstile-Perfect](https://github.com/stormpath/Turnstile) integration. This features:
 
+* Username / Password Authentication
+* Facebook / Google Login
+* API Key authentication for API Endpoints
 
-[![Swift 3.0](https://img.shields.io/badge/Swift-3.0-orange.svg?style=flat)](https://developer.apple.com/swift/)
-[![Platforms OS X | Linux](https://img.shields.io/badge/Platforms-OS%20X%20%7C%20Linux%20-lightgray.svg?style=flat)](https://developer.apple.com/swift/)
-[![License Apache](https://img.shields.io/badge/License-Apache-lightgrey.svg?style=flat)](http://perfect.org/licensing.html)
-[![Twitter](https://img.shields.io/badge/Twitter-@PerfectlySoft-blue.svg?style=flat)](http://twitter.com/PerfectlySoft)
-[![Join the chat at https://gitter.im/PerfectlySoft/Perfect](https://img.shields.io/badge/Gitter-Join%20Chat-brightgreen.svg)](https://gitter.im/PerfectlySoft/Perfect?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Slack Status](http://perfect.ly/badge.svg)](http://perfect.ly)
+## Usage
 
-Perfect Empty Starter Project
+### Install Swift via Swiftenv
 
-This repository holds a blank Perfect project which can be cloned to serve as a starter for new work. It builds with Swift Package Manager and produces a stand-alone HTTP executable.
+If you haven't already, install Swift via [Swiftenv](https://swiftenv.fuller.li/en/latest/).
 
-**The master branch of this project currently compiles with the default Swift 3.0 toolchain included in Xcode 8 beta 2. On Ubuntu use the *Swift 3.0 Preview 2* toolchain, released July 7th.**
-
-Ensure that you have installed the few dependencies which Perfect requires for your platform:
-
-[Dependencies](https://github.com/PerfectlySoft/Perfect/wiki/Dependencies)
-
-## Issues
-
-We are transitioning to using JIRA for all bugs and support related issues, therefore the GitHub issues has been disabled.
-
-If you find a mistake, bug, or any other helpful suggestion you'd like to make on the docs please head over to [http://jira.perfect.org:8080/servicedesk/customer/portal/1](http://jira.perfect.org:8080/servicedesk/customer/portal/1) and raise it.
-
-A comprehensive list of open issues can be found at [http://jira.perfect.org:8080/projects/ISS/issues](http://jira.perfect.org:8080/projects/ISS/issues)
-
-
-## Building & Running
-
-The following will clone and build an empty starter project and launch the server on port 8181.
-
-```
-git clone https://github.com/PerfectlySoft/PerfectTemplate.git
-cd PerfectTemplate
-swift build
-.build/debug/PerfectTemplate
+```bash
+$ git clone https://github.com/kylef/swiftenv.git ~/.swiftenv
+$ echo 'export SWIFTENV_ROOT="$HOME/.swiftenv"' >> ~/.bash_profile
+$ echo 'export PATH="$SWIFTENV_ROOT/bin:$PATH"' >> ~/.bash_profile
+$ echo 'eval "$(swiftenv init -)"' >> ~/.bash_profile
 ```
 
-You should see the following output:
+### Run the Example
 
-```
-Starting HTTP server on 0.0.0.0:8181 with document root ./webroot
-```
-
-This means the server is running and waiting for connections. Access [http://localhost:8181/](http://127.0.0.1:8181/) to see the greeting. Hit control-c to terminate the server.
-
-## Starter Content
-
-The template file contains a very simple "hello, world!" example.
-
-```swift
-import PerfectLib
-import PerfectHTTP
-import PerfectHTTPServer
-
-// Create HTTP server.
-let server = HTTPServer()
-
-// Register your own routes and handlers
-var routes = Routes()
-routes.add(method: .get, uri: "/", handler: {
-		request, response in
-		response.appendBody(string: "<html><title>Hello, world!</title><body>Hello, world!</body></html>")
-		response.completed()
-	}
-)
-
-// Add the routes to the server.
-server.addRoutes(routes)
-
-// Set a listen port of 8181
-server.serverPort = 8181
-
-// Set a document root.
-// This is optional. If you do not want to serve static content then do not set this.
-// Setting the document root will automatically add a static file handler for the route /**
-server.documentRoot = "./webroot"
-
-// Gather command line options and further configure the server.
-// Run the server with --help to see the list of supported arguments.
-// Command line arguments will supplant any of the values set above.
-configureServer(server)
-
-do {
-	// Launch the HTTP server.
-	try server.start()
-} catch PerfectError.networkError(let err, let msg) {
-	print("Network error thrown: \(err) \(msg)")
-}
+```bash
+$ swiftenv install
+$ swift build
+$ .build/debug/App
 ```
 
+The application should run on port `8181` by default, so you should be able to access it from `http://localhost:8181`
 
+The example code is commented and designed to be readable. Take a look through the code to see what it's doing! 
 
-## Further Information
-For more information on the Perfect project, please visit [perfect.org](http://perfect.org).
+### Set up Facebook and Google Login
+
+To learn more about Facebook and Google Login, [check out the parent guide in the Turnstile documentation](https://github.com/stormpath/Turnstile#authenticating-with-facebook-or-google). 
+
+#### Create a Facebook Application
+
+To get started, you first need to [register an application](https://developers.facebook.com/?advanced_app_create=true) with Facebook. After registering your app, go into your app dashboard's settings page. Add the Facebook Login product, and save the changes. 
+
+In the `Valid OAuth redirect URIs` box, type in your application's URL, postpended with `/login/facebook/consumer`. (eg, `http://localhost:8181/login/facebook/consumer`)
+
+#### Create a Google Application
+
+To get started, you first need to [register an application](https://console.developers.google.com/project) with Google. Click "Enable and Manage APIs", and then the [credentials tab](https://console.developers.google.com/apis/credentials). Create an OAuth Client ID for "Web".
+
+Add your application's URL, postpended with `/login/facebook/consumer` to the `Authorized redirect URIs` list. (eg, `http://localhost:8181/login/google/consumer`)
+
+#### Add your Client ID / Secret as Environment Variables
+
+This example reads your Facebook and Google Client ID / Secret from environment variables, so you can make it portable. To add it to your application, first collect your Facebook / Google Client ID and Secret (sometimes called App ID), and set them as environment variables:
+
+```bash
+$ export FACEBOOK_CLIENT_ID=<Put Client ID here>
+$ export FACEBOOK_CLIENT_Secret=<Put Client Secret here>
+$ export GOOGLE_CLIENT_ID=<Put Client ID here>
+$ export GOOGLE_CLIENT_Secret=<Put Client Secret here>
+```
+
+This is also possible in Xcode under `Edit Scheme > Arguments > Environment Variables`. 
+
+Now run the application. Facebook and Google login should work! 
+
+*Note: Facebook / Google Login are broken in Swift 3.0 on Linux, because of a Foundation bug. This demo should work in `DEVELOPMENT-SNAPSHOT-2016-09-14-a` or later, or in the official 3.0.1 release (not PREVIEW-1).*
+
+# Contributing
+
+We're always open to contributions! Feel free to join the [Stormpath slack channel](https://talkstormpath.shipit.xyz) to discuss how you can contribute!
+
+# Stormpath
+
+Turnstile is built by [Stormpath](https://stormpath.com), an API service for authentication, authorization, and user management. If you're building a website, API, or app, and need to build authentication and user management, consider using Stormpath for your needs. We're always happy to help!
